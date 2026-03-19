@@ -51,7 +51,7 @@ const litvideoPlans = [
 
 const videoModels = ["Seedance 2.0"];
 const imageModels = ["Nano Banana", "Flux"];
-const features = ["Image to Video", "Text to Video", "Extend Video", "Video Effects", "Image Generate", "Image Effects", "Video to Animation", "AI Animation"];
+const features = ["Image to Video", "Text to Video", "Image Generate"];
 
 const faqs = [
   { q: "可以免費試用 SotaVideo 嗎？", a: "可以！我們提供免費試用，讓你體驗我們的 AI 工具。部分功能可能有限制，但你可以充分感受我們的服務。" },
