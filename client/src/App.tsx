@@ -5,6 +5,8 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import { CreditsProvider } from "./contexts/CreditsContext";
+import FreeCreditsPopup from "./components/FreeCreditsPopup";
 import Home from "./pages/Home";
 import Pricing from "./pages/Pricing";
 import AIVideoGenerator from "./pages/AIVideoGenerator";
@@ -28,10 +30,13 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
+          <CreditsProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+              <FreeCreditsPopup />
+            </TooltipProvider>
+          </CreditsProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
@@ -39,4 +44,3 @@ function App() {
 }
 
 export default App;
-

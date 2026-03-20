@@ -1,24 +1,46 @@
 /*
  * Design: Cyberpunk Neon - AI Video Generator 頁面
- * 模型選擇、生成介面、功能展示
+ * 模型選擇、兩種生成模式介面
  */
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import {
-  Play, Upload, Type, Image, Video, Wand2, Sparkles,
-  ArrowRight, Check, ChevronDown, ChevronUp, Zap, Clock, Shield
+  Play, Upload, Wand2, Sparkles, X, AtSign,
+  ArrowRight, Check, ChevronDown, ChevronUp, Zap, Clock, Shield,
+  Monitor, Smartphone, Square, RectangleHorizontal, RectangleVertical,
+  HelpCircle, Film
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FloatingButtons from "@/components/FloatingButtons";
+import { useCredits } from "@/contexts/CreditsContext";
 import { toast } from "sonner";
 
 const AI_VIDEO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/84842417/NrLFTuBVgcSvSqAoxUSkPi/ai-video-section-bQ5f7LVTS94Ujyr43RTcMT.webp";
 
 const models = [
-  { name: "Seedance 2.0", tag: "Recommended", color: "neon-purple" },
+  { name: "Seedance 2.0", desc: "生成更精細的內容", hasAudio: true },
+  { name: "Seedance 2.0 Fast", desc: "極速生成，高性價比", hasAudio: true },
 ];
+
+type GenerationMode = "keyframe" | "smart";
+
+interface UploadedFile {
+  file: File;
+  preview: string;
+  type: "image" | "video";
+}
+
+const aspectRatios = [
+  { value: "16:9", icon: <RectangleHorizontal className="w-5 h-5" /> },
+  { value: "9:16", icon: <RectangleVertical className="w-5 h-5" /> },
+  { value: "1:1", icon: <Square className="w-4 h-4" /> },
+  { value: "4:3", icon: <Monitor className="w-5 h-5" /> },
+  { value: "3:4", icon: <Smartphone className="w-5 h-5" /> },
+];
+
+const durations = ["5s", "10s", "15s"];
 
 const useCases = [
   { icon: "📢", title: "行銷與廣告", desc: "用引人注目的行銷影片提升品牌形象。" },
@@ -32,29 +54,129 @@ const faqs = [
   { q: "SotaVideo 如何運作？", a: "只需選擇輸入類型（文字、圖片、影片），描述你的願景，我們的 AI 就會施展魔法！選擇風格，自訂你喜歡的效果，然後下載你的影片。" },
   { q: "SotaVideo 支援哪些影片格式？", a: "SotaVideo 支援常見的影片格式，如 MP4、MOV 等，用於輸入和輸出。" },
   { q: "我可以用 SotaVideo 創建哪些類型的影片？", a: "可能性幾乎無限！你可以創建社群媒體影片、行銷廣告、解說影片、動畫內容、動漫風格影片等。讓你的想像力自由駆駁！" },
-  { q: "可以使用自己的圖片和影片嗎？", a: "可以！SotaVideo 支援圖片轉影片和影片轉動漫功能，讓你上傳自己的素材並以令人興奮的方式轉換它們。" },
   { q: "我的資料安全嗎？", a: "是的！我們非常重視你的隱私。我們使用業界標準的安全措施來保護你的資料。" },
 ];
 
-type InputMode = "text" | "image" | "video";
-
 export default function AIVideoGenerator() {
   const [selectedModel, setSelectedModel] = useState("Seedance 2.0");
-  const [inputMode, setInputMode] = useState<InputMode>("text");
+  const [mode, setMode] = useState<GenerationMode>("keyframe");
   const [prompt, setPrompt] = useState("");
+  const [duration, setDuration] = useState("5s");
+  const [aspectRatio, setAspectRatio] = useState("16:9");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  // Keyframe mode state
+  const [firstFrame, setFirstFrame] = useState<UploadedFile | null>(null);
+  const [lastFrame, setLastFrame] = useState<UploadedFile | null>(null);
+
+  // Smart mode state
+  const [smartFiles, setSmartFiles] = useState<UploadedFile[]>([]);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [showResult, setShowResult] = useState(false);
 
-  const handleGenerate = () => {
-    if (!prompt.trim()) {
-      toast.error("請輸入提示詞或上傳素材");
+  const firstFrameRef = useRef<HTMLInputElement>(null);
+  const lastFrameRef = useRef<HTMLInputElement>(null);
+  const smartFileRef = useRef<HTMLInputElement>(null);
+
+  const credits = mode === "keyframe" ? 60 : 80;
+
+  const handleFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    target: "first" | "last" | "smart"
+  ) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file) => {
+      const isVideo = file.type.startsWith("video/");
+      const isImage = file.type.startsWith("image/");
+      if (!isVideo && !isImage) return;
+
+      if (target === "smart") {
+        // Check limits: max 9 images + 1 video
+        const currentImages = smartFiles.filter((f) => f.type === "image").length;
+        const currentVideos = smartFiles.filter((f) => f.type === "video").length;
+        if (smartFiles.length >= 10) {
+          toast.error("最多上傳 10 個檔案");
+          return;
+        }
+        if (isImage && currentImages >= 9) {
+          toast.error("最多上傳 9 張圖片");
+          return;
+        }
+        if (isVideo && currentVideos >= 1) {
+          toast.error("最多上傳 1 個影片");
+          return;
+        }
+        if (isVideo && file.size > 50 * 1024 * 1024) {
+          toast.error("影片限制 50MB");
+          return;
+        }
+
+        const preview = URL.createObjectURL(file);
+        setSmartFiles((prev) => [...prev, { file, preview, type: isVideo ? "video" : "image" }]);
+      } else {
+        if (!isImage) {
+          toast.error("僅支援圖片格式");
+          return;
+        }
+        const preview = URL.createObjectURL(file);
+        const uploaded: UploadedFile = { file, preview, type: "image" };
+        if (target === "first") setFirstFrame(uploaded);
+        else setLastFrame(uploaded);
+      }
+    });
+
+    e.target.value = "";
+  };
+
+  const removeSmartFile = (index: number) => {
+    setSmartFiles((prev) => {
+      const removed = prev[index];
+      URL.revokeObjectURL(removed.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const insertTag = (index: number) => {
+    const f = smartFiles[index];
+    const tag = f.type === "video" ? "@video1 " : `@image${smartFiles.slice(0, index).filter(x => x.type === "image").length + 1} `;
+    setPrompt((prev) => prev + tag);
+  };
+
+  const { credits: userCredits, spendCredits } = useCredits();
+
+  const handleGenerate = async () => {
+    if (mode === "keyframe" && !firstFrame) {
+      toast.error("請上傳首幀圖片");
+      return;
+    }
+    if (mode === "smart" && smartFiles.length === 0) {
+      toast.error("請上傳至少一個參考資源");
+      return;
+    }
+    if (userCredits < credits) {
+      toast.error(`積分不足！需要 ${credits} Credits，目前只有 ${userCredits} Credits`);
       return;
     }
     setIsGenerating(true);
     setShowResult(false);
-    toast.info("影片生成中，請稍候...");
+
+    const desc = mode === "keyframe" ? "Video Keyframe" : "Video Smart";
+    const success = await spendCredits(credits, `${desc} - ${selectedModel}`, {
+      model: selectedModel,
+      mode,
+      duration,
+      aspectRatio,
+    });
+    if (!success) {
+      toast.error("積分扣除失敗");
+      setIsGenerating(false);
+      return;
+    }
+
+    toast.info(`已消耗 ${credits} Credits，影片生成中...`);
     setTimeout(() => {
       setIsGenerating(false);
       setShowResult(true);
@@ -91,117 +213,242 @@ export default function AIVideoGenerator() {
 
             {/* Model Selection */}
             <div className="mb-6">
-              <label className="text-sm font-display font-medium text-foreground mb-3 block">選擇 AI 模型</label>
-              <div className="flex flex-wrap gap-2">
+              <label className="text-sm font-display font-medium text-foreground mb-3 block">模型版本</label>
+              <div className="flex flex-wrap gap-3">
                 {models.map((model) => (
                   <button key={model.name}
                     onClick={() => setSelectedModel(model.name)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
+                    className={`relative flex items-start gap-3 px-4 py-3 rounded-xl border transition-all ${
                       selectedModel === model.name
-                        ? "bg-gradient-to-r from-neon-purple to-neon-pink text-white"
-                        : "bg-white/5 text-muted-foreground hover:text-foreground hover:bg-white/10"
+                        ? "border-neon-purple bg-neon-purple/10"
+                        : "border-border/50 bg-white/5 hover:border-border"
                     }`}
                   >
-                    {model.name}
-                    {model.tag && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                        model.tag === "New" ? "bg-neon-pink/20 text-neon-pink"
-                        : model.tag === "Premium" ? "bg-neon-yellow/20 text-neon-yellow"
-                        : "bg-neon-cyan/20 text-neon-cyan"
-                      }`}>
-                        {model.tag}
+                    {model.hasAudio && (
+                      <span className="flex items-center gap-1 text-[10px] text-neon-cyan bg-neon-cyan/10 px-1.5 py-0.5 rounded">
+                        <span className="inline-block w-3 h-3">🔊</span> 聲音
                       </span>
+                    )}
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-foreground">{model.name}</p>
+                      <p className="text-xs text-muted-foreground">{model.desc}</p>
+                    </div>
+                    {selectedModel === model.name && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-neon-purple flex items-center justify-center">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
                     )}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Input Mode Tabs */}
-            <div className="mb-4">
-              <div className="flex gap-1 p-1 rounded-lg bg-white/5 w-fit">
-                {[
-                  { id: "text" as InputMode, label: "Text to Video", icon: <Type className="w-4 h-4" /> },
-                  { id: "image" as InputMode, label: "Image to Video", icon: <Image className="w-4 h-4" /> },
-                  { id: "video" as InputMode, label: "Video to Animation", icon: <Video className="w-4 h-4" /> },
-                ].map((mode) => (
-                  <button key={mode.id}
-                    onClick={() => setInputMode(mode.id)}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-                      inputMode === mode.id
-                        ? "bg-neon-purple/20 text-neon-purple"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {mode.icon}
-                    {mode.label}
+            {/* Generation Mode Selector */}
+            <div className="mb-6">
+              <label className="text-sm font-display font-medium text-foreground mb-3 block">生成模式</label>
+              <div className="relative">
+                <button
+                  onClick={() => setMode(mode === "keyframe" ? "smart" : "keyframe")}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border/50 bg-white/5 hover:border-border transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    {mode === "keyframe" ? (
+                      <Film className="w-4 h-4 text-neon-purple" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 text-neon-cyan" />
+                    )}
+                    <span className="text-sm text-foreground">
+                      {mode === "keyframe" ? "首尾影格模式" : "智能模式"}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+            </div>
+
+            {/* === KEYFRAME MODE === */}
+            {mode === "keyframe" && (
+              <div className="mb-6">
+                <label className="text-sm font-display font-medium text-foreground mb-3 block">圖片</label>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* First Frame */}
+                  <div>
+                    <input ref={firstFrameRef} type="file" accept="image/*" className="hidden"
+                      onChange={(e) => handleFileUpload(e, "first")} />
+                    {firstFrame ? (
+                      <div className="relative rounded-xl overflow-hidden aspect-square bg-black/30 group">
+                        <img src={firstFrame.preview} alt="首幀" className="w-full h-full object-cover" />
+                        <button onClick={() => { URL.revokeObjectURL(firstFrame.preview); setFirstFrame(null); }}
+                          className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-center py-1.5">
+                          <span className="text-xs text-white">首幀</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => firstFrameRef.current?.click()}
+                        className="w-full aspect-square rounded-xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center gap-2 hover:border-neon-purple/30 transition-colors bg-white/5">
+                        <Upload className="w-8 h-8 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">點擊上傳</span>
+                        <span className="text-[10px] text-muted-foreground/60">首幀</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Last Frame (optional) */}
+                  <div>
+                    <input ref={lastFrameRef} type="file" accept="image/*" className="hidden"
+                      onChange={(e) => handleFileUpload(e, "last")} />
+                    {lastFrame ? (
+                      <div className="relative rounded-xl overflow-hidden aspect-square bg-black/30 group">
+                        <img src={lastFrame.preview} alt="尾幀" className="w-full h-full object-cover" />
+                        <button onClick={() => { URL.revokeObjectURL(lastFrame.preview); setLastFrame(null); }}
+                          className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-center py-1.5">
+                          <span className="text-xs text-white">尾幀 (可選)</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => lastFrameRef.current?.click()}
+                        className="w-full aspect-square rounded-xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center gap-2 hover:border-neon-purple/30 transition-colors bg-white/5">
+                        <Upload className="w-8 h-8 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">點擊上傳</span>
+                        <span className="text-[10px] text-muted-foreground/60">尾幀 (可選)</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* === SMART MODE === */}
+            {mode === "smart" && (
+              <div className="mb-6">
+                <label className="text-sm font-display font-medium text-foreground mb-3 block">
+                  上傳（圖片/影片）
+                  <span className="text-xs text-muted-foreground ml-2">最多 9 張圖片 + 1 個影片</span>
+                </label>
+                <input ref={smartFileRef} type="file" accept="image/*,video/*" multiple className="hidden"
+                  onChange={(e) => handleFileUpload(e, "smart")} />
+                <div className="flex flex-wrap gap-3">
+                  {smartFiles.map((f, i) => (
+                    <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden bg-black/30 group">
+                      {f.type === "image" ? (
+                        <img src={f.preview} alt={`ref-${i}`} className="w-full h-full object-cover" />
+                      ) : (
+                        <video src={f.preview} className="w-full h-full object-cover" muted />
+                      )}
+                      <button onClick={() => removeSmartFile(i)}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <X className="w-3 h-3 text-white" />
+                      </button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-center py-0.5">
+                        <span className="text-[10px] text-white">{f.type === "video" ? "影片" : `圖${i + 1}`}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {smartFiles.length < 10 && (
+                    <button onClick={() => smartFileRef.current?.click()}
+                      className="w-20 h-20 rounded-xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center gap-1 hover:border-neon-cyan/30 transition-colors bg-white/5">
+                      <Upload className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-[10px] text-muted-foreground">上傳</span>
+                    </button>
+                  )}
+                </div>
+                {smartFiles.some((f) => f.type === "video") && (
+                  <p className="text-xs text-muted-foreground/60 mt-2">影片限制 50MB，2-15.4 秒</p>
+                )}
+              </div>
+            )}
+
+            {/* Prompt */}
+            <div className="mb-6">
+              <label className="text-sm font-display font-medium text-foreground mb-3 block">提示詞</label>
+              <div className="relative">
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder={mode === "keyframe"
+                    ? "描述你想要生成的影片內容... 例如：Explosion view effect: Objects are suspended..."
+                    : "描述你想要生成的影片... 使用 @image1 引用上傳的圖片"
+                  }
+                  className="w-full h-32 p-4 rounded-xl bg-white/5 border border-border/50 text-foreground placeholder-muted-foreground resize-none focus:outline-none focus:border-neon-purple/50 focus:ring-1 focus:ring-neon-purple/30 transition-all"
+                />
+                {mode === "smart" && smartFiles.length > 0 && (
+                  <div className="absolute bottom-3 right-3 flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground">引用：</span>
+                    {smartFiles.map((f, i) => {
+                      const label = f.type === "video"
+                        ? "video1"
+                        : `image${smartFiles.slice(0, i).filter(x => x.type === "image").length + 1}`;
+                      return (
+                        <button key={i} onClick={() => insertTag(i)}
+                          className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] hover:opacity-80 transition-colors ${
+                            f.type === "video" ? "bg-neon-pink/10 text-neon-pink" : "bg-neon-cyan/10 text-neon-cyan"
+                          }`}>
+                          <AtSign className="w-2.5 h-2.5" />
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end mt-1">
+                <button className="text-xs text-neon-purple/60 hover:text-neon-purple flex items-center gap-1 transition-colors">
+                  <Sparkles className="w-3 h-3" />
+                  優化提示詞
+                </button>
+              </div>
+            </div>
+
+            {/* Duration */}
+            <div className="mb-6">
+              <label className="text-sm font-display font-medium text-foreground mb-3 block">時長</label>
+              <div className="flex gap-2">
+                {durations.map((d) => (
+                  <button key={d} onClick={() => setDuration(d)}
+                    className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
+                      duration === d
+                        ? "bg-white/10 text-foreground border border-foreground/30"
+                        : "bg-white/5 text-muted-foreground hover:text-foreground border border-transparent"
+                    }`}>
+                    {d}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Input Area */}
-            {inputMode === "text" ? (
-              <div className="mb-6">
-                <textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="描述你想要生成的影片內容... 例如：一位女孩揮舞長劍，正面視角，動作流暢，電影級畫質"
-                  className="w-full h-32 p-4 rounded-xl bg-white/5 border border-border/50 text-foreground placeholder-muted-foreground resize-none focus:outline-none focus:border-neon-purple/50 focus:ring-1 focus:ring-neon-purple/30 transition-all"
-                />
-              </div>
-            ) : (
-              <div className="mb-6">
-                <div className="border-2 border-dashed border-border/50 rounded-xl p-12 text-center hover:border-neon-purple/30 transition-colors">
-                  <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {inputMode === "image" ? "拖放圖片或點擊上傳" : "拖放影片或點擊上傳"}
-                  </p>
-                  <p className="text-xs text-muted-foreground/60">
-                    {inputMode === "image" ? "支援 JPG, PNG, WebP" : "支援 MP4, MOV, WebM"}
-                  </p>
-                  <button className="mt-4 px-4 py-2 rounded-full border border-neon-purple/50 text-neon-purple text-sm hover:bg-neon-purple/10 transition-all"
-                    onClick={() => toast.info("此為展示功能")}>
-                    選擇檔案
+            {/* Aspect Ratio */}
+            <div className="mb-8">
+              <label className="text-sm font-display font-medium text-foreground mb-3 block">尺寸</label>
+              <div className="flex gap-2">
+                {aspectRatios.map((ar) => (
+                  <button key={ar.value} onClick={() => setAspectRatio(ar.value)}
+                    className={`flex flex-col items-center gap-1.5 px-4 py-3 rounded-xl text-sm transition-all ${
+                      aspectRatio === ar.value
+                        ? "bg-white/10 text-foreground border border-foreground/30"
+                        : "bg-white/5 text-muted-foreground hover:text-foreground border border-transparent"
+                    }`}>
+                    {ar.icon}
+                    <span className="text-xs">{ar.value}</span>
                   </button>
-                </div>
-                <textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="（可選）添加額外的描述或風格指示..."
-                  className="w-full h-20 mt-4 p-4 rounded-xl bg-white/5 border border-border/50 text-foreground placeholder-muted-foreground resize-none focus:outline-none focus:border-neon-purple/50 transition-all"
-                />
+                ))}
               </div>
-            )}
+            </div>
 
-            {/* Settings Row */}
-            <div className="flex flex-wrap items-center gap-4 mb-6">
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground">比例</label>
-                <select className="px-3 py-1.5 rounded-lg bg-white/5 border border-border/50 text-sm text-foreground focus:outline-none">
-                  <option value="16:9">16:9</option>
-                  <option value="9:16">9:16</option>
-                  <option value="1:1">1:1</option>
-                  <option value="4:3">4:3</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground">時長</label>
-                <select className="px-3 py-1.5 rounded-lg bg-white/5 border border-border/50 text-sm text-foreground focus:outline-none">
-                  <option value="5">5 秒</option>
-                  <option value="10">10 秒</option>
-                  <option value="15">15 秒</option>
-                  <option value="30">30 秒</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground">品質</label>
-                <select className="px-3 py-1.5 rounded-lg bg-white/5 border border-border/50 text-sm text-foreground focus:outline-none">
-                  <option value="standard">Standard</option>
-                  <option value="hd">HD</option>
-                  <option value="4k">4K</option>
-                </select>
-              </div>
+            {/* Credits Info */}
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="w-4 h-4 text-neon-purple" />
+              <span className="text-sm text-foreground">
+                所需積分: <span className="font-mono text-neon-yellow">{credits}</span>
+              </span>
+              <button className="text-muted-foreground hover:text-foreground transition-colors">
+                <HelpCircle className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Generate Button */}
@@ -211,13 +458,9 @@ export default function AIVideoGenerator() {
               {isGenerating ? (
                 <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> 生成中...</>
               ) : (
-                <><Wand2 className="w-5 h-5" /> 生成影片</>
+                <><Wand2 className="w-5 h-5" /> 創建</>
               )}
             </button>
-
-            <p className="text-xs text-muted-foreground text-center mt-3">
-              使用模型: <span className="text-neon-cyan">{selectedModel}</span> · 每次生成消耗 10-20 Credits
-            </p>
 
             {/* Generation Progress */}
             {isGenerating && (
@@ -247,7 +490,7 @@ export default function AIVideoGenerator() {
                       <Play className="w-8 h-8 text-white fill-white" />
                     </div>
                   </div>
-                  <div className="absolute bottom-3 right-3 px-2 py-1 rounded bg-black/50 text-xs text-white">0:05</div>
+                  <div className="absolute bottom-3 right-3 px-2 py-1 rounded bg-black/50 text-xs text-white">0:{duration.replace("s", "").padStart(2, "0")}</div>
                 </div>
                 <div className="flex items-center gap-3 mt-3">
                   <button className="flex-1 py-2 rounded-lg bg-gradient-to-r from-neon-purple to-neon-pink text-white text-sm font-medium hover:opacity-90 transition-all"

@@ -5,9 +5,10 @@
  */
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, ChevronDown, Play, Image, LogOut, User } from "lucide-react";
+import { Menu, X, ChevronDown, Play, Image, LogOut, User, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCredits } from "@/contexts/CreditsContext";
 
 const videoTools = [
   { name: "Seedance 2.0", href: "/ai-video-generator" },
@@ -23,6 +24,7 @@ export default function Navbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [location] = useLocation();
   const { user, loading, signInWithGoogle, signOut } = useAuth();
+  const { credits, plan, cancelPlan } = useCredits();
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Close user menu on outside click
@@ -89,52 +91,9 @@ export default function Navbar() {
           </Link>
         </div>
 
-        {/* Right side */}
+        {/* Desktop right - Login only when not logged in */}
         <div className="hidden lg:flex items-center gap-3">
-          {loading ? (
-            <div className="w-8 h-8 rounded-full bg-foreground/10 animate-pulse" />
-          ) : user ? (
-            /* Logged in: avatar + dropdown */
-            <div className="relative" ref={userMenuRef}>
-              <button
-                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors"
-              >
-                {userAvatar ? (
-                  <img src={userAvatar} alt={userName} className="w-8 h-8 rounded-full border border-neon-purple/50" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-neon-purple to-neon-pink flex items-center justify-center text-white text-sm font-medium">
-                    {userName.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <ChevronDown className={`w-3 h-3 text-foreground/60 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
-              </button>
-              <AnimatePresence>
-                {userMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-full mt-2 w-64 rounded-xl glass-card neon-glow p-3 shadow-2xl"
-                  >
-                    <div className="px-3 py-2 mb-2 border-b border-border/30">
-                      <p className="text-sm font-medium text-foreground truncate">{userName}</p>
-                      <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
-                    </div>
-                    <button
-                      onClick={() => { signOut(); setUserMenuOpen(false); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground/70 hover:text-foreground hover:bg-white/5 rounded-lg transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      登出
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          ) : (
-            /* Logged out: Login button */
+          {!loading && !user && (
             <button
               onClick={signInWithGoogle}
               className="px-4 py-2 text-sm text-foreground/70 hover:text-foreground transition-colors flex items-center gap-2"
@@ -148,16 +107,88 @@ export default function Navbar() {
               Login
             </button>
           )}
-          <Link href="/ai-video-generator"
-            className="px-5 py-2.5 text-sm font-medium rounded-full bg-gradient-to-r from-neon-purple to-neon-pink text-white neon-glow hover:opacity-90 transition-opacity">
-            Try For Free
-          </Link>
         </div>
 
-        {/* Mobile toggle */}
-        <button className="lg:hidden p-2 text-foreground/70" onClick={() => setMobileOpen(!mobileOpen)}>
-          {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+        {/* Credits - always visible on all screen sizes */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 text-sm text-foreground/80">
+            <Sparkles className="w-4 h-4 text-neon-purple" />
+            <span className="font-mono font-medium">{credits}</span>
+          </div>
+          {plan ? (
+            /* Has plan: show badge */
+            <span className={`px-3 py-1 text-xs font-semibold rounded-full text-white ${
+              plan === 'full' ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
+              plan === 'pro' ? 'bg-gradient-to-r from-neon-cyan to-neon-purple' :
+              'bg-gradient-to-r from-neon-purple to-neon-pink'
+            }`}>
+              {plan === 'full' ? 'Full' : plan === 'pro' ? 'Pro' : 'Plus'}
+            </span>
+          ) : (
+            /* No plan: show STD badge linking to pricing */
+            <Link href="/pricing"
+              className="px-3 py-1 text-xs font-semibold rounded-full bg-white/10 text-foreground/70 hover:bg-white/20 transition-colors">
+              STD
+            </Link>
+          )}
+
+          {/* Desktop: user avatar */}
+          <div className="hidden lg:block">
+            {!loading && user && (
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-1 ml-1 rounded-full hover:bg-white/5 transition-colors"
+                >
+                  {userAvatar ? (
+                    <img src={userAvatar} alt={userName} className="w-8 h-8 rounded-full border border-neon-purple/50" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-neon-purple to-neon-pink flex items-center justify-center text-white text-sm font-medium">
+                      {userName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </button>
+                <AnimatePresence>
+                  {userMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 8 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-64 rounded-xl glass-card neon-glow p-3 shadow-2xl"
+                    >
+                      <div className="px-3 py-2 mb-2 border-b border-border/30">
+                        <p className="text-sm font-medium text-foreground truncate">{userName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
+                      </div>
+                      {plan && plan !== 'full' && (
+                        <button
+                          onClick={async () => { await cancelPlan(); setUserMenuOpen(false); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400/70 hover:text-red-400 hover:bg-white/5 rounded-lg transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                          退訂方案
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { signOut(); setUserMenuOpen(false); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground/70 hover:text-foreground hover:bg-white/5 rounded-lg transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        登出
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile toggle */}
+          <button className="lg:hidden p-2 text-foreground/70" onClick={() => setMobileOpen(!mobileOpen)}>
+            {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
@@ -191,11 +222,20 @@ export default function Navbar() {
                           {userName.charAt(0).toUpperCase()}
                         </div>
                       )}
-                      <div>
+                      <div className="flex-1">
                         <p className="text-sm font-medium text-foreground">{userName}</p>
                         <p className="text-xs text-muted-foreground">{userEmail}</p>
                       </div>
                     </div>
+                    {plan && plan !== 'full' && (
+                      <button
+                        onClick={async () => { await cancelPlan(); setMobileOpen(false); }}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-red-400/70"
+                      >
+                        <X className="w-4 h-4" />
+                        退訂方案
+                      </button>
+                    )}
                     <button
                       onClick={() => { signOut(); setMobileOpen(false); }}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-foreground/70"

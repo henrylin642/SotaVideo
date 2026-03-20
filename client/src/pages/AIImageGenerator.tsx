@@ -13,14 +13,13 @@ import {
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FloatingButtons from "@/components/FloatingButtons";
+import { useCredits } from "@/contexts/CreditsContext";
 import { toast } from "sonner";
 
 const AI_VIDEO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/84842417/NrLFTuBVgcSvSqAoxUSkPi/ai-video-section-bQ5f7LVTS94Ujyr43RTcMT.webp";
 
 const models = [
   { name: "Nano Banana 2", tag: "Recommended", color: "neon-purple" },
-  { name: "Flux", tag: "", color: "neon-cyan" },
-  { name: "Seedream", tag: "New", color: "neon-pink" },
 ];
 
 const styles = [
@@ -60,14 +59,33 @@ export default function AIImageGenerator() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showResult, setShowResult] = useState(false);
 
-  const handleGenerate = () => {
+  const { credits: userCredits, spendCredits } = useCredits();
+  const IMAGE_COST = 10;
+
+  const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast.error("請輸入提示詞或上傳參考圖片");
       return;
     }
+    if (userCredits < IMAGE_COST) {
+      toast.error(`積分不足！需要 ${IMAGE_COST} Credits，目前只有 ${userCredits} Credits`);
+      return;
+    }
     setIsGenerating(true);
     setShowResult(false);
-    toast.info("圖片生成中，請稍候...");
+
+    const success = await spendCredits(IMAGE_COST, `Image Generate - ${selectedModel}`, {
+      model: selectedModel,
+      style: selectedStyle,
+      inputMode,
+    });
+    if (!success) {
+      toast.error("積分扣除失敗");
+      setIsGenerating(false);
+      return;
+    }
+
+    toast.info(`已消耗 ${IMAGE_COST} Credits，圖片生成中...`);
     setTimeout(() => {
       setIsGenerating(false);
       setShowResult(true);
@@ -251,7 +269,7 @@ export default function AIImageGenerator() {
             </button>
 
             <p className="text-xs text-muted-foreground text-center mt-3">
-              使用模型: <span className="text-neon-cyan">{selectedModel}</span> · 風格: <span className="text-neon-pink">{selectedStyle}</span> · 每次生成消耗 5-10 Credits
+              使用模型: <span className="text-neon-cyan">{selectedModel}</span> · 風格: <span className="text-neon-pink">{selectedStyle}</span> · 每次生成消耗 <span className="font-mono text-neon-yellow">10</span> Credits
             </p>
 
             {/* Generation Progress */}
@@ -343,7 +361,7 @@ export default function AIImageGenerator() {
               <div className="space-y-4">
                 {[
                   { icon: <Palette className="w-5 h-5" />, title: "多風格支援", desc: "8+ 種藝術風格任你選擇，從寫實到動漫應有盡有。" },
-                  { icon: <Zap className="w-5 h-5" />, title: "多模型引擎", desc: "整合 Nano Banana 2、Flux、Seedream 等頂級圖片模型。" },
+                  { icon: <Zap className="w-5 h-5" />, title: "頂級模型", desc: "採用 Nano Banana 2 頂級圖片生成模型。" },
                   { icon: <Clock className="w-5 h-5" />, title: "秒級生成", desc: "先進的 AI 引擎，10 秒內生成高品質圖片。" },
                   { icon: <Shield className="w-5 h-5" />, title: "商業授權", desc: "所有生成的圖片都可用於商業用途，無版權顧慮。" },
                 ].map((feature) => (

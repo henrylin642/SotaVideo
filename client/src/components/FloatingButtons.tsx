@@ -41,38 +41,8 @@ export default function FloatingButtons() {
         </motion.a>
       </div>
 
-      {/* Free Credits Promo */}
-      <AnimatePresence>
-        {showPromo && (
-          <motion.div
-            initial={{ x: 100, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 100, opacity: 0 }}
-            transition={{ delay: 2 }}
-            className="fixed right-6 bottom-48 z-40"
-          >
-            <div className="relative glass-card rounded-xl p-4 neon-glow max-w-[200px]">
-              <button
-                onClick={() => setShowPromo(false)}
-                className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-background border border-border flex items-center justify-center"
-              >
-                <X className="w-3 h-3 text-muted-foreground" />
-              </button>
-              <div className="flex items-center gap-2 mb-2">
-                <Gift className="w-5 h-5 text-neon-yellow" />
-                <span className="font-display font-semibold text-sm text-foreground">20 Free Credits</span>
-              </div>
-              <p className="text-xs text-muted-foreground mb-3">
-                註冊即可獲得免費積分！
-              </p>
-              <Link href="/ai-video-generator"
-                className="block w-full py-1.5 rounded-full bg-gradient-to-r from-neon-purple to-neon-pink text-white text-xs font-medium text-center hover:opacity-90 transition-all">
-                立即體驗
-              </Link>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
+
 
       {/* Scroll to Top */}
       <AnimatePresence>

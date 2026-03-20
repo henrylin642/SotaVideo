@@ -9,10 +9,17 @@ import { Check, Shield, HeadphonesIcon, CreditCard, Eye, ChevronDown, ChevronUp 
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FloatingButtons from "@/components/FloatingButtons";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCredits } from "@/contexts/CreditsContext";
+import { toast } from "sonner";
 
 const litvideoPlans = [
   {
     name: "Monthly",
+    badge: "Plus",
+    badgeColor: "from-neon-purple to-neon-pink",
+    planKey: "plus" as const,
+    creditsAmount: 600,
     price: "$14.99",
     period: "/月",
     billed: "每月計費 $14.99",
@@ -25,6 +32,10 @@ const litvideoPlans = [
   },
   {
     name: "Lifetime",
+    badge: "Full",
+    badgeColor: "from-yellow-500 to-orange-500",
+    planKey: "full" as const,
+    creditsAmount: 2000,
     price: "<$0.01",
     period: "/月",
     billed: "一次性付款 $125.97",
@@ -37,6 +48,10 @@ const litvideoPlans = [
   },
   {
     name: "Yearly",
+    badge: "Pro",
+    badgeColor: "from-neon-cyan to-neon-purple",
+    planKey: "pro" as const,
+    creditsAmount: 1000,
     price: "$7.50",
     period: "/月",
     billed: "年付 $89.99",
@@ -64,6 +79,33 @@ const faqs = [
 
 export default function Pricing() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [buyingPlan, setBuyingPlan] = useState<string | null>(null);
+  const { user, signInWithGoogle } = useAuth();
+  const { plan: currentPlan, purchasePlan } = useCredits();
+
+  const handleBuy = async (planKey: 'plus' | 'pro' | 'full', creditsAmount: number, planName: string) => {
+    if (!user) {
+      toast.info("請先登入再購買方案");
+      signInWithGoogle();
+      return;
+    }
+    if (currentPlan === 'full') {
+      toast.info("你已擁有終身方案，無需再購買");
+      return;
+    }
+    if (currentPlan === planKey) {
+      toast.info(`你已經是 ${planName} 方案用戶`);
+      return;
+    }
+    setBuyingPlan(planKey);
+    const success = await purchasePlan(planKey, creditsAmount);
+    setBuyingPlan(null);
+    if (success) {
+      toast.success(`🎉 成功購買 ${planName} 方案！已獲得 ${creditsAmount} Credits`);
+    } else {
+      toast.error("購買失敗，請稍後再試");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -111,7 +153,12 @@ export default function Pricing() {
                 )}
 
                 <div className="text-center mb-6">
-                  <h3 className="font-display font-semibold text-lg text-foreground mb-3">{plan.name}</h3>
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <h3 className="font-display font-semibold text-lg text-foreground">{plan.name}</h3>
+                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full text-white bg-gradient-to-r ${plan.badgeColor}`}>
+                      {plan.badge}
+                    </span>
+                  </div>
                   <div className="flex items-baseline justify-center gap-1">
                     <span className="font-display font-bold text-4xl text-foreground">{plan.price}</span>
                     <span className="text-muted-foreground">{plan.period}</span>
@@ -136,12 +183,23 @@ export default function Pricing() {
                   </div>
                 </div>
 
-                <button className={`w-full py-3 rounded-full font-medium text-sm transition-all ${
-                  plan.popular
+                <button
+                  onClick={() => handleBuy(plan.planKey, plan.creditsAmount, plan.badge)}
+                  disabled={buyingPlan === plan.planKey || currentPlan === plan.planKey || currentPlan === 'full'}
+                  className={`w-full py-3 rounded-full font-medium text-sm transition-all ${
+                  currentPlan === plan.planKey || (currentPlan === 'full' && plan.planKey !== 'full')
+                    ? "bg-white/10 text-foreground/50 cursor-default"
+                    : plan.popular
                     ? "bg-gradient-to-r from-neon-purple to-neon-pink text-white neon-glow hover:opacity-90"
                     : "border border-neon-purple/50 text-neon-purple hover:bg-neon-purple/10"
                 }`}>
-                  Buy Now
+                  {currentPlan === plan.planKey
+                    ? "當前方案"
+                    : currentPlan === 'full'
+                    ? "終身方案"
+                    : buyingPlan === plan.planKey
+                    ? "處理中..."
+                    : "Buy Now"}
                 </button>
 
                 {/* Model & Feature details */}
